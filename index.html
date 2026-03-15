@@ -263,16 +263,16 @@
         .apad { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; max-width: 148px; margin: 0 auto 12px; }
 
         .ab { /* arrow button */
-            background: var(--surface2); border: 1px solid var(--border);
-            color: var(--text2); border-radius: 8px;
+            background: rgba(59,158,255,0.07); border: 1px solid rgba(59,158,255,0.25);
+            color: var(--blue); border-radius: 8px;
             padding: 10px; cursor: pointer; font-size: 12px;
             display: flex; align-items: center; justify-content: center;
             transition: all 0.14s;
         }
-        .ab:hover { background: rgba(59,158,255,0.12); color: var(--blue); border-color: rgba(59,158,255,0.4); box-shadow: 0 0 8px rgba(59,158,255,0.15); }
-        .ab:active { transform: scale(0.88); }
-        .ab.center { background: var(--bg2); color: var(--muted); font-size: 16px; }
-        .ab.center:hover { color: var(--accent2); }
+        .ab:hover { background: rgba(59,158,255,0.18); border-color: rgba(59,158,255,0.55); box-shadow: 0 0 10px rgba(59,158,255,0.2); }
+        .ab:active { transform: scale(0.88); background: rgba(59,158,255,0.28); }
+        .ab.center { background: rgba(59,158,255,0.04); color: rgba(59,158,255,0.4); font-size: 16px; border-color: rgba(59,158,255,0.15); }
+        .ab.center:hover { color: var(--blue); background: rgba(59,158,255,0.12); }
 
         /* Step selector */
         .steps { display: flex; gap: 5px; justify-content: center; margin-bottom: 2px; }
@@ -288,13 +288,14 @@
         /* Size controls */
         .sz-row { display: flex; align-items: center; gap: 6px; }
         .sz-btn {
-            background: var(--surface); border: 1px solid var(--border);
-            color: var(--text2); border-radius: 6px;
+            background: rgba(34,208,122,0.07); border: 1px solid rgba(34,208,122,0.25);
+            color: var(--green); border-radius: 6px;
             width: 28px; height: 28px; cursor: pointer; font-size: 15px;
             display: flex; align-items: center; justify-content: center;
             transition: all 0.14s; flex-shrink: 0;
         }
-        .sz-btn:hover { background: rgba(34,208,122,0.12); color: var(--green); border-color: rgba(34,208,122,0.4); box-shadow: 0 0 6px rgba(34,208,122,0.15); }
+        .sz-btn:hover { background: rgba(34,208,122,0.18); border-color: rgba(34,208,122,0.55); box-shadow: 0 0 8px rgba(34,208,122,0.2); }
+        .sz-btn:active { transform: scale(0.9); background: rgba(34,208,122,0.28); }
         .sz-val {
             font-family: 'IBM Plex Mono', monospace; font-size: 12px;
             color: var(--accent); text-align: center; flex: 1;
@@ -334,12 +335,19 @@
 
         .preview-screen {
             background: #1a1a1a;
-            min-height: 80px;
-            display: flex; align-items: center; justify-content: center;
-            padding: 16px;
+            height: 90px;
+            max-height: 90px;
+            overflow-y: auto;
+            display: flex; align-items: flex-start; justify-content: flex-start;
+            padding: 12px;
             position: relative;
-            transition: all 0.2s;
+            transition: background 0.2s;
+            scrollbar-width: thin;
+            scrollbar-color: #333 #1a1a1a;
         }
+        .preview-screen::-webkit-scrollbar { width: 4px; }
+        .preview-screen::-webkit-scrollbar-track { background: #1a1a1a; }
+        .preview-screen::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
 
         .preview-screen.hidden-state {
             background: #0f0f0f;
@@ -612,7 +620,6 @@ const firebaseConfig = {
   messagingSenderId: "694195684122",
   appId: "1:694195684122:web:5e4bb4848222f4284222a3"
 };
-
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
