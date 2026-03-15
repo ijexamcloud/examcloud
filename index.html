@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExamCloud · Control Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:         #080c12;
+            --bg2:        #0c1118;
+            --surface:    #111820;
+            --surface2:   #161e28;
+            --border:     #1e2a38;
+            --border2:    #243040;
+            --accent:     #e8a020;
+            --accent2:    #f0b840;
+            --blue:       #3b9eff;
+            --green:      #22d07a;
+            --red:        #f04545;
+            --muted:      #4a5a6e;
+            --text:       #c2d0e0;
+            --text2:      #8898aa;
+            --white:      #eef2f7;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-image:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,158,255,0.07) 0%, transparent 60%),
+                radial-gradient(ellipse 40% 30% at 80% 80%, rgba(232,160,32,0.04) 0%, transparent 50%);
+        }
+
+        /* ── LOCK SCREEN ── */
+        #lockScreen {
+            position: fixed; inset: 0;
+            background: var(--bg);
+            background-image: radial-gradient(ellipse 60% 40% at 50% 40%, rgba(59,158,255,0.06) 0%, transparent 70%);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 9999;
+        }
+
+        .lock-wrap { text-align: center; width: 360px; }
+
+        .lock-logo {
+            display: flex; align-items: center; justify-content: center;
+            gap: 10px; margin-bottom: 36px;
+        }
+
+        .lock-logo-mark {
+            width: 38px; height: 38px;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            border-radius: 10px; font-size: 18px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 18px rgba(232,160,32,0.3);
+        }
+
+        .lock-logo-text {
+            font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800;
+            font-size: 24px; color: var(--white); letter-spacing: -0.3px;
+        }
+
+        .lock-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 36px 32px 28px;
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset, 0 32px 64px rgba(0,0,0,0.5);
+        }
+
+        .lock-heading { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; color: var(--white); margin-bottom: 6px; }
+        .lock-sub { font-size: 11px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 28px; }
+
+        .lock-field-wrap { position: relative; margin-bottom: 12px; }
+        .lock-field-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; pointer-events: none; }
+
+        .lock-input {
+            width: 100%; background: var(--bg2);
+            border: 1px solid var(--border); border-radius: 10px;
+            padding: 13px 16px 13px 40px;
+            font-family: 'IBM Plex Mono', monospace; font-size: 14px;
+            color: var(--accent2); letter-spacing: 0.15em; outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .lock-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(232,160,32,0.1); }
+        .lock-input::placeholder { color: var(--muted); letter-spacing: 0.04em; }
+
+        .lock-btn {
+            width: 100%; padding: 13px;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            color: #0a0800; font-family: 'Outfit', sans-serif; font-weight: 700;
+            font-size: 13px; letter-spacing: 0.1em; border: none; border-radius: 10px;
+            cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+            box-shadow: 0 4px 16px rgba(232,160,32,0.25);
+        }
+        .lock-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(232,160,32,0.35); }
+        .lock-btn:disabled { background: var(--surface2); color: var(--muted); box-shadow: none; cursor: not-allowed; transform: none; }
+
+        .lock-error { margin-top: 14px; font-size: 12px; color: var(--red); font-family: 'IBM Plex Mono', monospace; opacity: 0; transition: opacity 0.3s; min-height: 18px; }
+        .lock-error.show { opacity: 1; }
+
+        .lock-footer { margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 10px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+        .lock-dot { width: 3px; height: 3px; background: var(--muted); border-radius: 50%; }
+
+        .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(0,0,0,0.2); border-top-color: #000; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 5px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── MAIN APP ── */
+        #mainApp { display: none; width: 100%; max-width: 980px; padding: 24px 20px; }
+
+        .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 0 2px; }
+        .topbar-left { display: flex; align-items: center; gap: 12px; }
+
+        .app-logo-mark {
+            width: 32px; height: 32px;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            border-radius: 9px; font-size: 15px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 10px rgba(232,160,32,0.3);
+        }
+
+        .app-title { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 21px; font-weight: 800; letter-spacing: -0.3px; color: var(--white); }
+        .app-title em { color: var(--accent); font-style: normal; font-weight: 800; }
+
+        .topbar-right { display: flex; align-items: center; gap: 8px; }
+
+        .pill {
+            display: flex; align-items: center; gap: 7px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 20px; padding: 5px 13px;
+            font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--text2);
+            transition: all 0.3s;
+        }
+
+        .pill.synced { border-color: rgba(34,208,122,0.25); color: var(--green); }
+        .pill.typing { border-color: rgba(232,160,32,0.25); color: var(--accent); }
+        .pill.error  { border-color: rgba(240,69,69,0.25); color: var(--red); }
+
+        .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+        .pill-dot.pulse { animation: blink 1.4s ease infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        /* Main layout */
+        .layout { display: grid; grid-template-columns: 1fr 320px; gap: 14px; align-items: start; }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.02) inset;
+            overflow: hidden;
+        }
+
+        .ch { /* card header */
+            padding: 13px 18px;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(180deg, var(--surface2), var(--surface));
+            display: flex; align-items: center; justify-content: space-between;
+        }
+
+        .ch-title {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10px; font-weight: 600;
+            letter-spacing: 0.14em; text-transform: uppercase;
+            color: var(--text2);
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        .ch-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+        .cb { padding: 18px; } /* card body */
+
+        /* Textarea */
+        textarea {
+            width: 100%; min-height: 115px;
+            background: var(--bg2); border: 1px solid var(--border);
+            border-radius: 10px; padding: 14px;
+            font-family: 'IBM Plex Mono', monospace; font-size: 14px;
+            color: var(--green); resize: vertical; outline: none;
+            transition: border-color 0.2s; line-height: 1.65;
+        }
+        textarea:focus { border-color: var(--border2); }
+        textarea::placeholder { color: var(--muted); font-size: 13px; }
+
+        /* Buttons */
+        .btn-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; margin-top: 12px; }
+
+        .btn {
+            padding: 10px 12px; border-radius: 9px; cursor: pointer;
+            font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 12px;
+            letter-spacing: 0.03em; transition: all 0.18s;
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+            white-space: nowrap; border: 1px solid var(--border);
+        }
+
+        .btn-default { background: var(--surface2); color: var(--text2); }
+        .btn-default:hover { background: var(--border); color: var(--text); }
+
+        .btn-mic { background: rgba(59,158,255,0.08); color: var(--blue); border-color: rgba(59,158,255,0.2); }
+        .btn-mic:hover { background: rgba(59,158,255,0.15); border-color: rgba(59,158,255,0.4); }
+        .btn-mic.rec { background: rgba(59,158,255,0.18); border-color: var(--blue); animation: mic-glow 1.5s ease infinite; }
+        @keyframes mic-glow { 0%,100%{box-shadow:0 0 0 0 rgba(59,158,255,0.25)} 50%{box-shadow:0 0 0 5px rgba(59,158,255,0)} }
+
+        .btn-kill { background: rgba(240,69,69,0.08); color: var(--red); border-color: rgba(240,69,69,0.2); padding: 10px 18px; }
+        .btn-kill:hover { background: rgba(240,69,69,0.18); border-color: rgba(240,69,69,0.45); }
+
+        .mic-countdown { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--blue); opacity: 0; transition: opacity 0.3s; }
+        .mic-countdown.show { opacity: 1; }
+
+        /* Appearance grid */
+        .appear-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+        .ctrl {
+            background: var(--bg2); border: 1px solid var(--border);
+            border-radius: 10px; padding: 10px 12px;
+        }
+        .ctrl.full { grid-column: span 2; }
+
+        .ctrl-lbl {
+            font-family: 'IBM Plex Mono', monospace; font-size: 9px;
+            text-transform: uppercase; letter-spacing: 0.1em;
+            color: var(--muted); margin-bottom: 8px;
+            display: flex; justify-content: space-between;
+        }
+        .ctrl-lbl b { color: var(--accent); font-weight: 500; }
+
+        input[type=range] { width: 100%; accent-color: var(--accent); }
+        input[type=color] { width: 100%; height: 28px; border: none; background: none; cursor: pointer; }
+        select { width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; outline: none; }
+
+        /* Status bar */
+        .sbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 9px 18px; border-top: 1px solid var(--border);
+            background: var(--bg2); font-family: 'IBM Plex Mono', monospace;
+            font-size: 10px; color: var(--muted);
+        }
+
+        /* Right panel */
+        .rp { display: flex; flex-direction: column; gap: 12px; }
+
+        /* Position display */
+        .pos-row { display: flex; gap: 8px; margin-bottom: 14px; }
+
+        .pos-box {
+            flex: 1; background: var(--bg2); border: 1px solid var(--border);
+            border-radius: 8px; padding: 8px 10px; text-align: center;
+        }
+        .pos-box-label { font-family: 'IBM Plex Mono', monospace; font-size: 8px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 3px; }
+        .pos-box-val { font-family: 'IBM Plex Mono', monospace; font-size: 15px; color: var(--accent); font-weight: 600; }
+
+        /* Arrow pad */
+        .apad { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; max-width: 148px; margin: 0 auto 12px; }
+
+        .ab { /* arrow button */
+            background: var(--surface2); border: 1px solid var(--border);
+            color: var(--text2); border-radius: 8px;
+            padding: 10px; cursor: pointer; font-size: 12px;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.14s;
+        }
+        .ab:hover { background: rgba(59,158,255,0.12); color: var(--blue); border-color: rgba(59,158,255,0.4); box-shadow: 0 0 8px rgba(59,158,255,0.15); }
+        .ab:active { transform: scale(0.88); }
+        .ab.center { background: var(--bg2); color: var(--muted); font-size: 16px; }
+        .ab.center:hover { color: var(--accent2); }
+
+        /* Step selector */
+        .steps { display: flex; gap: 5px; justify-content: center; margin-bottom: 2px; }
+        .sb { /* step button */
+            background: var(--bg2); border: 1px solid var(--border);
+            color: var(--muted); border-radius: 6px; padding: 3px 11px;
+            cursor: pointer; font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+            transition: all 0.14s;
+        }
+        .sb:hover { color: var(--accent); border-color: rgba(232,160,32,0.3); }
+        .sb.on { border-color: var(--accent); color: var(--accent); background: rgba(232,160,32,0.08); }
+
+        /* Size controls */
+        .sz-row { display: flex; align-items: center; gap: 6px; }
+        .sz-btn {
+            background: var(--surface); border: 1px solid var(--border);
+            color: var(--text2); border-radius: 6px;
+            width: 28px; height: 28px; cursor: pointer; font-size: 15px;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.14s; flex-shrink: 0;
+        }
+        .sz-btn:hover { background: rgba(34,208,122,0.12); color: var(--green); border-color: rgba(34,208,122,0.4); box-shadow: 0 0 6px rgba(34,208,122,0.15); }
+        .sz-val {
+            font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+            color: var(--accent); text-align: center; flex: 1;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 6px; padding: 4px 0;
+        }
+
+        .divider { height: 1px; background: var(--border); margin: 14px 0; }
+
+        @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        .fade-in { animation: fadeUp 0.35s ease forwards; }
+
+        /* Preview box */
+        .preview-wrap {
+            margin-top: 12px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .preview-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 7px 12px;
+            background: var(--surface2);
+            border-bottom: 1px solid var(--border);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        .preview-live-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 6px var(--green);
+            animation: blink 1.4s ease infinite;
+        }
+
+        .preview-screen {
+            background: #1a1a1a;
+            min-height: 80px;
+            display: flex; align-items: center; justify-content: center;
+            padding: 16px;
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .preview-screen.hidden-state {
+            background: #0f0f0f;
+        }
+
+        .preview-hidden-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10px;
+            color: var(--red);
+            opacity: 0.5;
+            letter-spacing: 0.1em;
+            display: none;
+        }
+
+        .preview-hidden-label.show { display: block; }
+
+        #previewText {
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+            width: 100%;
+            text-align: left;
+            padding: 8px 10px;
+            border-radius: 6px;
+            transition: all 0.15s;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ══ LOCK SCREEN ══ -->
+<div id="lockScreen">
+    <div class="lock-wrap">
+        <div class="lock-logo">
+            <div class="lock-logo-mark">☁</div>
+            <div class="lock-logo-text">ExamCloud</div>
+        </div>
+        <div class="lock-card">
+            <div class="lock-heading">Control Center</div>
+            <div class="lock-sub">Restricted · Session Token Required</div>
+            <div class="lock-field-wrap">
+                <span class="lock-field-icon">🔑</span>
+                <input class="lock-input" type="password" id="tokenInput"
+                    placeholder="Enter access token" autocomplete="off"
+                    onkeydown="if(event.key==='Enter') submitToken()">
+            </div>
+            <button class="lock-btn" id="unlockBtn" onclick="submitToken()">Unlock Session</button>
+            <div class="lock-error" id="lockError">⚠ <span id="lockMsg">Invalid or expired token.</span></div>
+            <div class="lock-footer">
+                <span>One-use token</span><div class="lock-dot"></div>
+                <span>Firebase secured</span><div class="lock-dot"></div>
+                <span>Admin revocable</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══ MAIN APP ══ -->
+<div id="mainApp">
+    <!-- Top Bar -->
+    <div class="topbar">
+        <div class="topbar-left">
+            <div class="app-logo-mark">☁</div>
+            <div class="app-title">Exam<em>Cloud</em> Control</div>
+        </div>
+        <div class="topbar-right">
+            <div class="pill">
+                <div class="pill-dot" style="background:var(--green);box-shadow:0 0 5px var(--green);"></div>
+                <span id="sessionLabel">SESSION —</span>
+            </div>
+            <div class="pill" id="syncPill">
+                <div class="pill-dot" id="syncDot"></div>
+                <span id="syncText">Idle</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Layout -->
+    <div class="layout fade-in">
+
+        <!-- LEFT -->
+        <div style="display:flex; flex-direction:column; gap:14px;">
+
+            <!-- Message composer -->
+            <div class="card">
+                <div class="ch">
+                    <div class="ch-title">
+                        <div class="ch-dot" style="background:var(--accent);box-shadow:0 0 6px var(--accent);"></div>
+                        Message Composer
+                    </div>
+                    <div class="mic-countdown" id="micCD">⏱ <span id="micSec">60</span>s</div>
+                </div>
+                <div class="cb">
+                    <textarea id="msg" oninput="debounceSync();updatePreview()" placeholder="Type your message to the student…"></textarea>
+                    <div class="btn-row">
+                        <button class="btn btn-mic" id="micBtn" onclick="toggleSpeech()">🎤 Dictate</button>
+                        <button class="btn btn-default" onclick="undo()">↩ Undo <span id="histCount" style="opacity:0.45;font-size:10px;">(0)</span></button>
+                        <button class="btn btn-default" onclick="clearText()">✕ Clear</button>
+                        <button class="btn btn-kill" onclick="masterKill()">⚠ KILL</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Appearance -->
+            <div class="card">
+                <div class="ch">
+                    <div class="ch-title">
+                        <div class="ch-dot" style="background:var(--blue);box-shadow:0 0 6px var(--blue);"></div>
+                        Appearance
+                    </div>
+                </div>
+                <div class="cb">
+                    <div class="appear-grid">
+                        <div class="ctrl">
+                            <div class="ctrl-lbl">Text Color</div>
+                            <input type="color" id="tCol" value="#00ff00" onchange="debounceSync()">
+                        </div>
+                        <div class="ctrl">
+                            <div class="ctrl-lbl">Box Color</div>
+                            <input type="color" id="bCol" value="#000000" onchange="debounceSync()">
+                        </div>
+                        <div class="ctrl">
+                            <div class="ctrl-lbl">Text Opacity <b id="vTO">1.0</b></div>
+                            <input type="range" id="tOp" min="0" max="1" step="0.1" value="1" oninput="updateLabels();debounceSync()">
+                        </div>
+                        <div class="ctrl">
+                            <div class="ctrl-lbl">Box Opacity <b id="vO">0.7</b></div>
+                            <input type="range" id="boxOp" min="0" max="1" step="0.1" value="0.7" oninput="updateLabels();debounceSync()">
+                        </div>
+                        <div class="ctrl full" id="visCtrl" style="background:rgba(240,69,69,0.06);border-color:rgba(240,69,69,0.25);">
+                            <div class="ctrl-lbl" style="margin-bottom:10px;">
+                                Overlay Visibility
+                                <div id="visLed" style="width:10px;height:10px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red),0 0 16px rgba(240,69,69,0.4);transition:all 0.3s;"></div>
+                            </div>
+                            <input type="hidden" id="boxDisplay" value="none">
+                            <div style="display:flex;gap:8px;">
+                                <button id="visShowBtn" onclick="setVisibility('block')"
+                                    style="flex:1;padding:9px 6px;border-radius:8px;cursor:pointer;font-family:'Outfit',sans-serif;font-weight:600;font-size:11px;letter-spacing:0.05em;transition:all 0.18s;border:1px solid var(--border);background:var(--surface2);color:var(--text2);">
+                                    ◉ Show
+                                </button>
+                                <button id="visHideBtn" onclick="setVisibility('none')"
+                                    style="flex:1;padding:9px 6px;border-radius:8px;cursor:pointer;font-family:'Outfit',sans-serif;font-weight:600;font-size:11px;letter-spacing:0.05em;transition:all 0.18s;border:1px solid rgba(240,69,69,0.4);background:rgba(240,69,69,0.12);color:var(--red);">
+                                    ◎ Hidden
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sbar">
+                    <span>Token: <span id="sessionTokenDisplay" style="color:var(--border2)">—</span></span>
+                    <span>Session managed by admin</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT -->
+        <div class="rp">
+
+            <!-- Position -->
+            <div class="card">
+                <div class="ch">
+                    <div class="ch-title">
+                        <div class="ch-dot" style="background:var(--green);box-shadow:0 0 6px var(--green);"></div>
+                        Position
+                    </div>
+                </div>
+                <div class="cb">
+                    <div class="pos-row">
+                        <div class="pos-box">
+                            <div class="pos-box-label">X Axis</div>
+                            <div class="pos-box-val"><span id="vX">10</span>%</div>
+                        </div>
+                        <div class="pos-box">
+                            <div class="pos-box-label">Y Axis</div>
+                            <div class="pos-box-val"><span id="vY">10</span>%</div>
+                        </div>
+                    </div>
+                    <div class="apad">
+                        <div></div>
+                        <button class="ab" onclick="movePos(0,-1)">▲</button>
+                        <div></div>
+                        <button class="ab" onclick="movePos(-1,0)">◀</button>
+                        <button class="ab center" onclick="centerPos()" title="Center">⌖</button>
+                        <button class="ab" onclick="movePos(1,0)">▶</button>
+                        <div></div>
+                        <button class="ab" onclick="movePos(0,1)">▼</button>
+                        <div></div>
+                    </div>
+                    <div class="steps">
+                        <button class="sb" onclick="setStep(1,this)">×1</button>
+                        <button class="sb on" onclick="setStep(5,this)">×5</button>
+                        <button class="sb" onclick="setStep(10,this)">×10</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Size -->
+            <div class="card">
+                <div class="ch">
+                    <div class="ch-title">
+                        <div class="ch-dot" style="background:#a78bfa;box-shadow:0 0 6px #a78bfa;"></div>
+                        Size
+                    </div>
+                </div>
+                <div class="cb">
+                    <div class="ctrl-lbl" style="margin-bottom:10px;">Overlay Width <b id="vW">30</b>%</div>
+                    <div class="sz-row">
+                        <button class="sz-btn" onclick="changeWidth(-1)">−</button>
+                        <div class="sz-val" id="widthVal">30%</div>
+                        <button class="sz-btn" onclick="changeWidth(1)">+</button>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="ctrl-lbl" style="margin-bottom:10px;">Overlay Height <b id="vH">Auto</b></div>
+                    <div class="sz-row">
+                        <button class="sz-btn" onclick="changeHeight(-1)">−</button>
+                        <div class="sz-val" id="heightVal" onclick="resetHeight()" title="Click to reset to Auto" style="cursor:pointer;">Auto</div>
+                        <button class="sz-btn" onclick="changeHeight(1)">+</button>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="ctrl-lbl" style="margin-bottom:10px;">Font Size <b id="vFS">18</b>px</div>
+                    <div class="sz-row">
+                        <button class="sz-btn" onclick="changeFontSize(-1)">−</button>
+                        <div class="sz-val" id="fontVal">18px</div>
+                        <button class="sz-btn" onclick="changeFontSize(1)">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Preview — below size card -->
+            <div class="preview-wrap">
+                <div class="preview-header">
+                    <span>Student Screen Preview</span>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <div class="preview-live-dot" id="previewLiveDot"></div>
+                        <span id="previewStatus">LIVE</span>
+                    </div>
+                </div>
+                <div class="preview-screen" id="previewScreen">
+                    <div id="previewText">(no message)</div>
+                    <div class="preview-hidden-label" id="previewHiddenLabel">◎ Hidden — not visible to student</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- Hidden state inputs -->
+<input type="hidden" id="posX" value="10">
+<input type="hidden" id="posY" value="10">
+<input type="hidden" id="width" value="30">
+<input type="hidden" id="height" value="auto">
+<input type="hidden" id="fSize" value="18">
+
+<!-- Firebase SDK v8 -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  PASTE YOUR FIREBASE CONFIG HERE
+// ════════════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyCb8oBqkPI-_vBqXm1qDCMGjn41rS_jn-w",
+  authDomain: "examcloud-7c2b4.firebaseapp.com",
+  databaseURL: "https://examcloud-7c2b4-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "examcloud-7c2b4",
+  storageBucket: "examcloud-7c2b4.firebasestorage.app",
+  messagingSenderId: "694195684122",
+  appId: "1:694195684122:web:5e4bb4848222f4284222a3"
+};
+
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+let currentToken = null;
+let syncTimeout;
+let undoStack = [];
+let moveStep = 5;
+let micActive = false;
+let micTimer = null;
+let micSeconds = 0;
+let recognition = null;
+const MIC_LIMIT = 60;
+
+// ── MIC ──────────────────────────────────────────────────────
+function toggleSpeech() {
+    micActive ? stopSpeech() : startSpeech();
+}
+
+function startSpeech() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert('Speech recognition not supported in this browser.'); return; }
+    recognition = new SR();
+    recognition.lang = 'en-US';
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.start();
+    micActive = true;
+    micSeconds = MIC_LIMIT;
+    document.getElementById('micBtn').className = 'btn btn-mic rec';
+    document.getElementById('micBtn').innerHTML = '⏹ Stop';
+    document.getElementById('micCD').classList.add('show');
+    document.getElementById('micSec').textContent = micSeconds;
+    micTimer = setInterval(() => {
+        micSeconds--;
+        document.getElementById('micSec').textContent = micSeconds;
+        if (micSeconds <= 0) stopSpeech();
+    }, 1000);
+    recognition.onresult = (e) => {
+        const ta = document.getElementById('msg');
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+            if (e.results[i].isFinal) ta.value += (ta.value ? ' ' : '') + e.results[i][0].transcript;
+        }
+        debounceSync();
+    };
+    recognition.onend = () => {
+        // Browser stops recognition after silence — restart to keep it going
+        if (micActive) {
+            setTimeout(() => {
+                try { recognition.start(); } catch(e) {}
+            }, 150);
+        }
+    };
+    recognition.onerror = (e) => {
+        // Only fully stop on real errors, not silence timeouts
+        if (e.error === 'no-speech') {
+            // silence — onend will handle restart
+        } else {
+            stopSpeech();
+        }
+    };
+}
+
+function stopSpeech() {
+    micActive = false;
+    clearInterval(micTimer);
+    if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
+    document.getElementById('micBtn').className = 'btn btn-mic';
+    document.getElementById('micBtn').innerHTML = '🎤 Dictate';
+    document.getElementById('micCD').classList.remove('show');
+}
+
+// ── AUTH ─────────────────────────────────────────────────────
+async function submitToken() {
+    const token = document.getElementById('tokenInput').value.trim();
+    if (!token) return;
+    const btn = document.getElementById('unlockBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Verifying…';
+    document.getElementById('lockError').classList.remove('show');
+    try {
+        const snap = await db.ref('tokens/' + token).get();
+        if (snap.exists()) {
+            const d = snap.val();
+            if (d.valid === true) {
+                await db.ref('tokens/' + token).update({ valid: false, active: true, usedAt: new Date().toISOString() });
+                currentToken = token;
+                unlockApp(d.session || token);
+            } else if (d.active === true) {
+                currentToken = token;
+                unlockApp(d.session || token);
+            } else {
+                lockErr('Token already used or expired.'); resetLockBtn();
+            }
+        } else { lockErr('Invalid token. Contact admin.'); resetLockBtn(); }
+    } catch(e) { lockErr('Connection error. Check internet.'); resetLockBtn(); }
+}
+
+function lockErr(msg) {
+    document.getElementById('lockMsg').textContent = msg;
+    document.getElementById('lockError').classList.add('show');
+    document.getElementById('tokenInput').value = '';
+}
+
+function resetLockBtn() {
+    const btn = document.getElementById('unlockBtn');
+    btn.disabled = false; btn.innerHTML = 'Unlock Session';
+}
+
+function unlockApp(name) {
+    document.getElementById('lockScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    document.getElementById('sessionLabel').textContent = name.toUpperCase();
+    document.getElementById('sessionTokenDisplay').textContent = currentToken;
+}
+
+// ── SYNC ─────────────────────────────────────────────────────
+function setSyncState(cls, txt) {
+    document.getElementById('syncPill').className = 'pill ' + cls;
+    document.getElementById('syncDot').className = 'pill-dot' + (cls === 'typing' ? ' pulse' : '');
+    document.getElementById('syncText').textContent = txt;
+}
+
+function debounceSync() {
+    setSyncState('typing', 'Typing…');
+    clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(pushUpdate, 400);
+}
+
+async function pushUpdate() {
+    const data = {
+        text:         document.getElementById('msg').value,
+        x:            document.getElementById('posX').value + '%',
+        y:            document.getElementById('posY').value + '%',
+        w:            document.getElementById('width').value + '%',
+        h:            document.getElementById('height').value === 'auto' ? 'auto' : document.getElementById('height').value + 'px',
+        tCol:         document.getElementById('tCol').value,
+        tOp:          document.getElementById('tOp').value,
+        bCol:         document.getElementById('bCol').value,
+        bOp:          document.getElementById('boxOp').value,
+        fSize:        document.getElementById('fSize').value + 'px',
+        display:      document.getElementById('boxDisplay').value,
+        sessionToken: currentToken,
+        ts:           Date.now()
+    };
+    const lastText = undoStack.length ? undoStack[undoStack.length-1].text : null;
+    if (data.text !== lastText) {
+        undoStack.push(JSON.parse(JSON.stringify(data)));
+        if (undoStack.length > 99) undoStack.shift();
+        document.getElementById('histCount').textContent = '(' + undoStack.length + ')';
+    }
+    try {
+        await db.ref('overlay').set(data);
+        setSyncState('synced', 'Synced ✓');
+    } catch(e) {
+        if (e.code === 'PERMISSION_DENIED' || (e.message && e.message.includes('permission'))) {
+            setSyncState('error', 'Revoked');
+            setTimeout(forceLock, 1500);
+        } else {
+            setSyncState('error', 'Offline');
+        }
+    }
+}
+
+async function forceLock() {
+    stopSpeech();
+    try {
+        await db.ref('overlay').set({ text:'', display:'none', x:'10%', y:'10%', w:'30%', h:'auto', tCol:'#00ff00', tOp:'1', bCol:'#000000', bOp:'0', fSize:'18px', sessionToken: currentToken, ts: Date.now() });
+    } catch(e) {}
+    currentToken = null;
+    document.getElementById('mainApp').style.display = 'none';
+    document.getElementById('lockScreen').style.display = 'flex';
+    document.getElementById('tokenInput').value = '';
+    lockErr('Session ended by admin.');
+    resetLockBtn();
+}
+
+// ── CONTROLS ─────────────────────────────────────────────────
+function updatePreview() {
+    const text     = document.getElementById('msg').value;
+    const tCol     = document.getElementById('tCol').value;
+    const tOp      = parseFloat(document.getElementById('tOp').value);
+    const bCol     = document.getElementById('bCol').value;
+    const bOp      = parseFloat(document.getElementById('boxOp').value);
+    const fSize    = document.getElementById('fSize').value;
+    const display  = document.getElementById('boxDisplay').value;
+
+    const previewText   = document.getElementById('previewText');
+    const previewScreen = document.getElementById('previewScreen');
+    const hiddenLabel   = document.getElementById('previewHiddenLabel');
+    const liveDot       = document.getElementById('previewLiveDot');
+    const statusLbl     = document.getElementById('previewStatus');
+
+    // Helper: hex + alpha → rgba
+    const hexRgba = (hex, a) => {
+        const r = parseInt(hex.slice(1,3),16);
+        const g = parseInt(hex.slice(3,5),16);
+        const b = parseInt(hex.slice(5,7),16);
+        return `rgba(${r},${g},${b},${a})`;
+    };
+
+    if (display === 'none') {
+        previewScreen.classList.add('hidden-state');
+        previewText.style.display    = 'none';
+        hiddenLabel.classList.add('show');
+        liveDot.style.background     = 'var(--red)';
+        liveDot.style.boxShadow      = '0 0 6px var(--red)';
+        liveDot.style.animation      = 'none';
+        statusLbl.textContent        = 'HIDDEN';
+        statusLbl.style.color        = 'var(--red)';
+    } else {
+        previewScreen.classList.remove('hidden-state');
+        previewText.style.display    = 'block';
+        hiddenLabel.classList.remove('show');
+        liveDot.style.background     = 'var(--green)';
+        liveDot.style.boxShadow      = '0 0 6px var(--green)';
+        liveDot.style.animation      = 'blink 1.4s ease infinite';
+        statusLbl.textContent        = 'LIVE';
+        statusLbl.style.color        = 'var(--green)';
+
+        previewText.textContent       = text || '(no message)';
+        previewText.style.color       = hexRgba(tCol, tOp);
+        previewText.style.fontSize    = fSize + 'px';
+        previewText.style.background  = hexRgba(bCol, bOp);
+    }
+}
+
+function updateLabels() {
+    document.getElementById('vX').textContent  = document.getElementById('posX').value;
+    document.getElementById('vY').textContent  = document.getElementById('posY').value;
+    document.getElementById('vW').textContent  = document.getElementById('width').value;
+    document.getElementById('vO').textContent  = document.getElementById('boxOp').value;
+    document.getElementById('vTO').textContent = document.getElementById('tOp').value;
+    document.getElementById('vFS').textContent = document.getElementById('fSize').value;
+    document.getElementById('widthVal').textContent = document.getElementById('width').value + '%';
+    const hv = document.getElementById('height').value;
+    document.getElementById('vH').textContent = hv === 'auto' ? 'Auto' : hv + 'px';
+    document.getElementById('heightVal').textContent = hv === 'auto' ? 'Auto' : hv + 'px';
+    document.getElementById('fontVal').textContent  = document.getElementById('fSize').value + 'px';
+    updatePreview();
+}
+
+function setStep(s, el) {
+    moveStep = s;
+    document.querySelectorAll('.sb').forEach(b => b.classList.remove('on'));
+    el.classList.add('on');
+}
+
+function movePos(dx, dy) {
+    const px = document.getElementById('posX');
+    const py = document.getElementById('posY');
+    px.value = Math.min(100, Math.max(0, parseInt(px.value) + dx * moveStep));
+    py.value = Math.min(100, Math.max(0, parseInt(py.value) + dy * moveStep));
+    updateLabels(); debounceSync();
+}
+
+function centerPos() {
+    document.getElementById('posX').value = 35;
+    document.getElementById('posY').value = 45;
+    updateLabels(); debounceSync();
+}
+
+function changeWidth(d) {
+    const w = document.getElementById('width');
+    w.value = Math.min(100, Math.max(5, parseInt(w.value) + d * moveStep));
+    updateLabels(); debounceSync();
+}
+
+function changeHeight(d) {
+    const h = document.getElementById('height');
+    const cur = h.value === 'auto' ? 80 : parseInt(h.value);
+    h.value = Math.min(800, Math.max(40, cur + d * moveStep));
+    updateLabels(); debounceSync();
+}
+
+function resetHeight() {
+    document.getElementById('height').value = 'auto';
+    updateLabels(); debounceSync();
+}
+
+function changeFontSize(d) {
+    const f = document.getElementById('fSize');
+    f.value = Math.min(72, Math.max(8, parseInt(f.value) + d));
+    updateLabels(); debounceSync();
+}
+
+function setVisibility(val) {
+    document.getElementById('boxDisplay').value = val;
+    const led    = document.getElementById('visLed');
+    const ctrl   = document.getElementById('visCtrl');
+    const showB  = document.getElementById('visShowBtn');
+    const hideB  = document.getElementById('visHideBtn');
+    if (val === 'block') {
+        led.style.background  = 'var(--green)';
+        led.style.boxShadow   = '0 0 8px var(--green), 0 0 16px rgba(34,208,122,0.4)';
+        ctrl.style.background = 'rgba(34,208,122,0.06)';
+        ctrl.style.borderColor= 'rgba(34,208,122,0.25)';
+        showB.style.background    = 'rgba(34,208,122,0.18)';
+        showB.style.borderColor   = 'rgba(34,208,122,0.5)';
+        showB.style.color         = 'var(--green)';
+        hideB.style.background    = 'var(--surface2)';
+        hideB.style.borderColor   = 'var(--border)';
+        hideB.style.color         = 'var(--text2)';
+    } else {
+        led.style.background  = 'var(--red)';
+        led.style.boxShadow   = '0 0 8px var(--red), 0 0 16px rgba(240,69,69,0.4)';
+        ctrl.style.background = 'rgba(240,69,69,0.06)';
+        ctrl.style.borderColor= 'rgba(240,69,69,0.25)';
+        hideB.style.background    = 'rgba(240,69,69,0.18)';
+        hideB.style.borderColor   = 'rgba(240,69,69,0.5)';
+        hideB.style.color         = 'var(--red)';
+        showB.style.background    = 'var(--surface2)';
+        showB.style.borderColor   = 'var(--border)';
+        showB.style.color         = 'var(--text2)';
+    }
+    debounceSync();
+}
+
+function masterKill() {
+    setVisibility('none');
+    document.getElementById('msg').value = '';
+    stopSpeech(); pushUpdate();
+}
+
+function clearText() {
+    document.getElementById('msg').value = ''; pushUpdate();
+}
+
+function undo() {
+    if (undoStack.length > 1) {
+        undoStack.pop();
+        const p = undoStack[undoStack.length-1];
+        document.getElementById('msg').value = p.text;
+        document.getElementById('boxDisplay').value = p.display;
+        updateLabels(); pushUpdate();
+    }
+}
+</script>
+</body>
+</html>
