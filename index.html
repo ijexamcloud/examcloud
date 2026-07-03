@@ -442,7 +442,7 @@
                     <div class="mic-countdown" id="micCD">⏱ <span id="micSec">60</span>s</div>
                 </div>
                 <div class="cb">
-                    <textarea id="msg" oninput="debounceSync();updatePreview()" placeholder="Type your message to the student…"></textarea>
+                    <textarea id="msg" oninput="handleMessageInput()" placeholder="Type your message to the student…"></textarea>
                     <div class="btn-row">
                         <button class="btn btn-mic" id="micBtn" onclick="toggleSpeech()">🎤 Dictate</button>
                         <button class="btn btn-default" onclick="undo()">↩ Undo <span id="histCount" style="opacity:0.45;font-size:10px;">(0)</span></button>
@@ -606,6 +606,7 @@
 <!-- Firebase SDK v8 -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="speechTranscript.js"></script>
 
 <script>
 // ════════════════════════════════════════════════════════════
@@ -632,6 +633,8 @@ let micActive = false;
 let micTimer = null;
 let micSeconds = 0;
 let recognition = null;
+let speechTranscript = createSpeechTranscriptController('');
+let pendingHistoryTrack = true;
 const MIC_LIMIT = 60;
 
 // ── MIC ──────────────────────────────────────────────────────
@@ -639,13 +642,44 @@ function toggleSpeech() {
     micActive ? stopSpeech() : startSpeech();
 }
 
+function getMessageBox() {
+    return document.getElementById('msg');
+}
+
+function rebaseSpeechTranscriptFromTextarea() {
+    speechTranscript.rebaseFromText(getMessageBox().value);
+}
+
+function renderSpeechTranscript() {
+    getMessageBox().value = speechTranscript.getDisplayText();
+    updatePreview();
+}
+
+function queueSync(delay, trackHistory) {
+    pendingHistoryTrack = trackHistory;
+    setSyncState('typing', 'Typing…');
+    clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(() => pushUpdate(pendingHistoryTrack), delay);
+}
+
+function syncSpeechUpdate() {
+    queueSync(80, false);
+}
+
+function handleMessageInput() {
+    rebaseSpeechTranscriptFromTextarea();
+    debounceSync();
+    updatePreview();
+}
+
 function startSpeech() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { alert('Speech recognition not supported in this browser.'); return; }
+    rebaseSpeechTranscriptFromTextarea();
     recognition = new SR();
     recognition.lang = 'en-US';
     recognition.continuous = true;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.start();
     micActive = true;
     micSeconds = MIC_LIMIT;
@@ -659,11 +693,16 @@ function startSpeech() {
         if (micSeconds <= 0) stopSpeech();
     }, 1000);
     recognition.onresult = (e) => {
-        const ta = document.getElementById('msg');
+        const nextSegments = [];
         for (let i = e.resultIndex; i < e.results.length; i++) {
-            if (e.results[i].isFinal) ta.value += (ta.value ? ' ' : '') + e.results[i][0].transcript;
+            nextSegments.push({
+                isFinal: e.results[i].isFinal,
+                transcript: e.results[i][0].transcript,
+            });
         }
-        debounceSync();
+        speechTranscript.applyResults(nextSegments, e.resultIndex);
+        renderSpeechTranscript();
+        syncSpeechUpdate();
     };
     recognition.onend = () => {
         // Browser stops recognition after silence — restart to keep it going
@@ -683,10 +722,17 @@ function startSpeech() {
     };
 }
 
-function stopSpeech() {
+function stopSpeech(commitInterim = true) {
     micActive = false;
     clearInterval(micTimer);
     if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
+    if (commitInterim) {
+        speechTranscript.commitInterim();
+        renderSpeechTranscript();
+        pushUpdate();
+    } else {
+        rebaseSpeechTranscriptFromTextarea();
+    }
     document.getElementById('micBtn').className = 'btn btn-mic';
     document.getElementById('micBtn').innerHTML = '🎤 Dictate';
     document.getElementById('micCD').classList.remove('show');
@@ -744,12 +790,10 @@ function setSyncState(cls, txt) {
 }
 
 function debounceSync() {
-    setSyncState('typing', 'Typing…');
-    clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(pushUpdate, 400);
+    queueSync(400, true);
 }
 
-async function pushUpdate() {
+async function pushUpdate(trackHistory = true) {
     const data = {
         text:         document.getElementById('msg').value,
         x:            document.getElementById('posX').value + '%',
@@ -766,7 +810,7 @@ async function pushUpdate() {
         ts:           Date.now()
     };
     const lastText = undoStack.length ? undoStack[undoStack.length-1].text : null;
-    if (data.text !== lastText) {
+    if (trackHistory && data.text !== lastText) {
         undoStack.push(JSON.parse(JSON.stringify(data)));
         if (undoStack.length > 99) undoStack.shift();
         document.getElementById('histCount').textContent = '(' + undoStack.length + ')';
@@ -940,12 +984,18 @@ function setVisibility(val) {
 
 function masterKill() {
     setVisibility('none');
+    stopSpeech(false);
     document.getElementById('msg').value = '';
-    stopSpeech(); pushUpdate();
+    speechTranscript.clear();
+    updatePreview();
+    pushUpdate();
 }
 
 function clearText() {
-    document.getElementById('msg').value = ''; pushUpdate();
+    document.getElementById('msg').value = '';
+    speechTranscript.clear();
+    updatePreview();
+    pushUpdate();
 }
 
 function undo() {
@@ -953,6 +1003,7 @@ function undo() {
         undoStack.pop();
         const p = undoStack[undoStack.length-1];
         document.getElementById('msg').value = p.text;
+        rebaseSpeechTranscriptFromTextarea();
         document.getElementById('boxDisplay').value = p.display;
         updateLabels(); pushUpdate();
     }
