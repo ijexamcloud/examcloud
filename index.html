@@ -486,11 +486,11 @@
                     <div class="appear-grid">
                         <div class="ctrl">
                             <div class="ctrl-lbl">Text Color</div>
-                            <input type="color" id="tCol" value="#00ff00" onchange="debounceSync()">
+                            <input type="color" id="tCol" value="#00ff00" oninput="updateLabels();debounceSync()" onchange="updateLabels();debounceSync()">
                         </div>
                         <div class="ctrl">
                             <div class="ctrl-lbl">Box Color</div>
-                            <input type="color" id="bCol" value="#000000" onchange="debounceSync()">
+                            <input type="color" id="bCol" value="#000000" oninput="updateLabels();debounceSync()" onchange="updateLabels();debounceSync()">
                         </div>
                         <div class="ctrl">
                             <div class="ctrl-lbl">Text Opacity <b id="vTO">1.0</b></div>
