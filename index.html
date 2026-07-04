@@ -1517,7 +1517,13 @@ function startSpeech() {
 function stopSpeech(commitInterim = true) {
     micActive = false;
     clearInterval(micTimer);
-    if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
+    if (recognition) {
+        recognition.onresult = null;
+        recognition.onend = null;
+        recognition.onerror = null;
+        try { recognition.stop(); } catch(e) {}
+        recognition = null;
+    }
     if (commitInterim) {
         speechTranscript.commitInterim();
         renderSpeechTranscript();
