@@ -237,6 +237,26 @@
         input[type=range] { width: 100%; accent-color: var(--accent); }
         input[type=color] { width: 100%; height: 28px; border: none; background: none; cursor: pointer; }
         select { width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; outline: none; }
+        .style-row { display: flex; gap: 8px; margin-top: 8px; }
+        .style-btn {
+            flex: 1;
+            min-width: 0;
+            padding: 9px 6px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            transition: all 0.18s;
+            border: 1px solid var(--border);
+            background: var(--surface2);
+            color: var(--text2);
+        }
+        .style-btn.active {
+            background: rgba(59,158,255,0.18);
+            border-color: rgba(59,158,255,0.45);
+            color: var(--blue);
+            box-shadow: 0 0 10px rgba(59,158,255,0.18);
+        }
 
         /* Status bar */
         .sbar {
@@ -366,8 +386,10 @@
 
         #previewText {
             font-family: monospace;
+            box-sizing: border-box;
             white-space: pre-wrap;
-            word-break: break-word;
+            overflow-wrap: break-word;
+            word-break: normal;
             width: 100%;
             text-align: left;
             padding: 8px 10px;
@@ -478,6 +500,15 @@
                             <div class="ctrl-lbl">Box Opacity <b id="vO">0.7</b></div>
                             <input type="range" id="boxOp" min="0" max="1" step="0.1" value="0.7" oninput="updateLabels();debounceSync()">
                         </div>
+                        <div class="ctrl full">
+                            <div class="ctrl-lbl">Text Style</div>
+                            <select id="fontFamilySelect" onchange="handleFontFamilyChange()"></select>
+                            <div class="style-row">
+                                <button type="button" class="style-btn" id="boldBtn" onclick="toggleTextStyle('bold')">B</button>
+                                <button type="button" class="style-btn" id="italicBtn" onclick="toggleTextStyle('italic')"><i>I</i></button>
+                                <button type="button" class="style-btn" id="underlineBtn" onclick="toggleTextStyle('underline')"><u>U</u></button>
+                            </div>
+                        </div>
                         <div class="ctrl full" id="visCtrl" style="background:rgba(240,69,69,0.06);border-color:rgba(240,69,69,0.25);">
                             <div class="ctrl-lbl" style="margin-bottom:10px;">
                                 Overlay Visibility
@@ -516,6 +547,15 @@
                     </div>
                 </div>
                 <div class="cb">
+                    <div class="ctrl full" style="margin-bottom:14px;">
+                        <div class="ctrl-lbl">Session Presets</div>
+                        <select id="presetSelect"></select>
+                        <div style="display:flex;gap:8px;margin-top:8px;">
+                            <button class="btn btn-default" id="applyPresetBtn" style="flex:1;" onclick="applySelectedPreset()">Apply</button>
+                            <button class="btn btn-default" id="savePresetBtn" style="flex:1;" onclick="saveCurrentPreset()">Save Current</button>
+                            <button class="btn btn-default" id="deletePresetBtn" style="flex:1;" onclick="deleteSelectedPreset()">Delete Custom</button>
+                        </div>
+                    </div>
                     <div class="pos-row">
                         <div class="pos-box">
                             <div class="pos-box-label">X Axis</div>
@@ -602,10 +642,14 @@
 <input type="hidden" id="width" value="30">
 <input type="hidden" id="height" value="auto">
 <input type="hidden" id="fSize" value="18">
+<input type="hidden" id="boldToggle" value="false">
+<input type="hidden" id="italicToggle" value="false">
+<input type="hidden" id="underlineToggle" value="false">
 
 <!-- Firebase SDK v8 -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="overlaySettings.js"></script>
 <script src="speechTranscript.js"></script>
 
 <script>
@@ -633,9 +677,287 @@ let micActive = false;
 let micTimer = null;
 let micSeconds = 0;
 let recognition = null;
+const CUSTOM_PRESETS_STORAGE_KEY = 'examcloud:custom-presets';
+const SESSION_DRAFTS_STORAGE_KEY = 'examcloud:session-drafts';
+const SESSION_DRAFTS_LIMIT = 5;
+let overlaySettingsStore = createOverlaySettingsStore({
+    customPresets: loadCustomPresets(),
+});
 let speechTranscript = createSpeechTranscriptController('');
 let pendingHistoryTrack = true;
+let draftSaveTimeout = null;
 const MIC_LIMIT = 60;
+const CONTROL_BINDINGS = [
+    { key: 'text', id: 'msg' },
+    { key: 'posX', id: 'posX', read: (value) => parseInt(value, 10) },
+    { key: 'posY', id: 'posY', read: (value) => parseInt(value, 10) },
+    { key: 'width', id: 'width', read: (value) => parseInt(value, 10) },
+    { key: 'height', id: 'height' },
+    { key: 'fontSize', id: 'fSize', read: (value) => parseInt(value, 10) },
+    { key: 'fontFamily', id: 'fontFamilySelect' },
+    { key: 'bold', id: 'boldToggle', read: (value) => value === 'true' },
+    { key: 'italic', id: 'italicToggle', read: (value) => value === 'true' },
+    { key: 'underline', id: 'underlineToggle', read: (value) => value === 'true' },
+    { key: 'textColor', id: 'tCol' },
+    { key: 'textOpacity', id: 'tOp' },
+    { key: 'boxColor', id: 'bCol' },
+    { key: 'boxOpacity', id: 'boxOp' },
+    { key: 'display', id: 'boxDisplay' },
+];
+
+function loadCustomPresets() {
+    try {
+        const raw = window.localStorage.getItem(CUSTOM_PRESETS_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+function persistCustomPresets(presets) {
+    try {
+        window.localStorage.setItem(CUSTOM_PRESETS_STORAGE_KEY, JSON.stringify(presets));
+    } catch (error) {}
+}
+
+function loadSessionDrafts() {
+    try {
+        const raw = window.localStorage.getItem(SESSION_DRAFTS_STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function persistSessionDrafts(drafts) {
+    try {
+        window.localStorage.setItem(SESSION_DRAFTS_STORAGE_KEY, JSON.stringify(drafts));
+    } catch (error) {}
+}
+
+function trimSessionDrafts(drafts) {
+    const entries = Object.entries(drafts || {});
+    if (entries.length <= SESSION_DRAFTS_LIMIT) {
+        return drafts || {};
+    }
+
+    return entries
+        .sort((a, b) => {
+            const aSavedAt = a[1] && a[1].savedAt ? a[1].savedAt : 0;
+            const bSavedAt = b[1] && b[1].savedAt ? b[1].savedAt : 0;
+            return bSavedAt - aSavedAt;
+        })
+        .slice(0, SESSION_DRAFTS_LIMIT)
+        .reduce((nextDrafts, entry) => {
+            nextDrafts[entry[0]] = entry[1];
+            return nextDrafts;
+        }, {});
+}
+
+function updateHistoryCountLabel() {
+    document.getElementById('histCount').textContent = '(' + undoStack.length + ')';
+}
+
+function buildCurrentSessionDraft() {
+    if (!currentToken) {
+        return null;
+    }
+
+    return {
+        version: 1,
+        token: currentToken,
+        sessionName: document.getElementById('sessionLabel').textContent || '',
+        savedAt: Date.now(),
+        settings: overlaySettingsStore.toPersistedSnapshot(),
+        undoStack: undoStack.slice(-99).map((entry) => ({
+            text: entry.text,
+            display: entry.display,
+        })),
+    };
+}
+
+function persistCurrentSessionDraft() {
+    clearTimeout(draftSaveTimeout);
+    draftSaveTimeout = null;
+    const draft = buildCurrentSessionDraft();
+    if (!draft) {
+        return;
+    }
+    const drafts = loadSessionDrafts();
+    drafts[currentToken] = draft;
+    persistSessionDrafts(trimSessionDrafts(drafts));
+}
+
+function scheduleSessionDraftSave() {
+    if (!currentToken) {
+        return;
+    }
+    clearTimeout(draftSaveTimeout);
+    draftSaveTimeout = setTimeout(() => {
+        persistCurrentSessionDraft();
+    }, 150);
+}
+
+function clearCurrentSessionDraft(tokenOverride) {
+    const token = tokenOverride || currentToken;
+    if (!token) {
+        return;
+    }
+    clearTimeout(draftSaveTimeout);
+    draftSaveTimeout = null;
+    const drafts = loadSessionDrafts();
+    if (!Object.prototype.hasOwnProperty.call(drafts, token)) {
+        return;
+    }
+    delete drafts[token];
+    persistSessionDrafts(drafts);
+}
+
+function restoreCurrentSessionDraft() {
+    if (!currentToken) {
+        return false;
+    }
+
+    const draft = loadSessionDrafts()[currentToken];
+    if (!draft || !draft.settings) {
+        return false;
+    }
+
+    const restoredState = applyOverlaySettingsStatePatch(draft.settings);
+    if (draft.settings.selectedPresetId) {
+        overlaySettingsStore.selectPreset(draft.settings.selectedPresetId);
+        refreshPresetControls();
+    }
+    speechTranscript.rebaseFromText(restoredState.text || '');
+    undoStack = Array.isArray(draft.undoStack)
+        ? draft.undoStack
+            .filter((entry) => entry && typeof entry.text === 'string')
+            .map((entry) => ({
+                text: entry.text,
+                display: entry.display || restoredState.display,
+            }))
+        : [];
+    if (!undoStack.length && restoredState.text) {
+        undoStack.push({
+            text: restoredState.text,
+            display: restoredState.display,
+        });
+    }
+    updateHistoryCountLabel();
+    updateLabels(restoredState);
+    setSyncState('typing', 'Recovered locally');
+    pushUpdate(false);
+    return true;
+}
+
+function getPresetMenuSelection() {
+    return document.getElementById('presetSelect').value;
+}
+
+function getSelectedPreset() {
+    const selectedId = overlaySettingsStore.getState().selectedPresetId;
+    return overlaySettingsStore.listPresets().find((preset) => preset.id === selectedId) || null;
+}
+
+function populateFontFamilyOptions() {
+    const fontFamilySelect = document.getElementById('fontFamilySelect');
+    fontFamilySelect.innerHTML = '';
+    FONT_OPTIONS.forEach((option) => {
+        const el = document.createElement('option');
+        el.value = option.value;
+        el.textContent = option.label;
+        fontFamilySelect.appendChild(el);
+    });
+}
+
+function readControlsIntoStatePatch() {
+    return CONTROL_BINDINGS.reduce((patch, binding) => {
+        const rawValue = document.getElementById(binding.id).value;
+        patch[binding.key] = binding.read ? binding.read(rawValue) : rawValue;
+        return patch;
+    }, {});
+}
+
+function writeStateToControls(state) {
+    CONTROL_BINDINGS.forEach((binding) => {
+        document.getElementById(binding.id).value = state[binding.key];
+    });
+}
+
+function applyOverlaySettingsStatePatch(patch) {
+    const state = overlaySettingsStore.update(patch || {});
+    writeStateToControls(state);
+    syncTextStyleButtonStates(state);
+    refreshPresetControls();
+    return state;
+}
+
+function refreshPresetControls() {
+    const presetSelect = document.getElementById('presetSelect');
+    const deletePresetBtn = document.getElementById('deletePresetBtn');
+    const presets = overlaySettingsStore.listPresets();
+    const state = overlaySettingsStore.getState();
+
+    presetSelect.innerHTML = '';
+    presets.forEach((preset) => {
+        const option = document.createElement('option');
+        option.value = preset.id;
+        option.textContent = preset.id === state.layoutPresetId ? preset.name + ' (Active)' : preset.name;
+        presetSelect.appendChild(option);
+    });
+
+    if (!presets.some((preset) => preset.id === state.selectedPresetId)) {
+        const currentOption = document.createElement('option');
+        currentOption.value = state.selectedPresetId;
+        currentOption.textContent = state.selectedPresetId === 'custom'
+            ? 'Current Layout (Unsaved, Active)'
+            : 'Selected Preset';
+        presetSelect.appendChild(currentOption);
+    }
+
+    presetSelect.value = state.selectedPresetId;
+    const selectedPreset = getSelectedPreset();
+    deletePresetBtn.disabled = !(selectedPreset && selectedPreset.id.startsWith('custom-'));
+}
+
+function applyOverlaySettingsStateToControls() {
+    const state = overlaySettingsStore.getState();
+    writeStateToControls(state);
+    syncTextStyleButtonStates(state);
+    refreshPresetControls();
+}
+
+function syncOverlaySettingsStoreFromControls() {
+    const state = overlaySettingsStore.update(readControlsIntoStatePatch());
+    syncTextStyleButtonStates(state);
+    refreshPresetControls();
+    return state;
+}
+
+function syncTextStyleButtonStates(state) {
+    document.getElementById('boldBtn').classList.toggle('active', !!state.bold);
+    document.getElementById('italicBtn').classList.toggle('active', !!state.italic);
+    document.getElementById('underlineBtn').classList.toggle('active', !!state.underline);
+}
+
+function toggleTextStyle(styleKey) {
+    const state = overlaySettingsStore.getState();
+    const nextState = applyOverlaySettingsStatePatch({ [styleKey]: !state[styleKey] });
+    updateLabels(nextState);
+    debounceSync();
+}
+
+function handleFontFamilyChange() {
+    const nextState = applyOverlaySettingsStatePatch({
+        fontFamily: document.getElementById('fontFamilySelect').value,
+    });
+    updateLabels(nextState);
+    debounceSync();
+}
 
 // ── MIC ──────────────────────────────────────────────────────
 function toggleSpeech() {
@@ -651,8 +973,10 @@ function rebaseSpeechTranscriptFromTextarea() {
 }
 
 function renderSpeechTranscript() {
-    getMessageBox().value = speechTranscript.getDisplayText();
-    updatePreview();
+    const nextState = applyOverlaySettingsStatePatch({
+        text: speechTranscript.getDisplayText(),
+    });
+    updateLabels(nextState);
 }
 
 function queueSync(delay, trackHistory) {
@@ -668,8 +992,9 @@ function syncSpeechUpdate() {
 
 function handleMessageInput() {
     rebaseSpeechTranscriptFromTextarea();
+    const state = syncOverlaySettingsStoreFromControls();
     debounceSync();
-    updatePreview();
+    updateLabels(state);
 }
 
 function startSpeech() {
@@ -780,6 +1105,12 @@ function unlockApp(name) {
     document.getElementById('mainApp').style.display = 'block';
     document.getElementById('sessionLabel').textContent = name.toUpperCase();
     document.getElementById('sessionTokenDisplay').textContent = currentToken;
+    if (!restoreCurrentSessionDraft()) {
+        applyOverlaySettingsStateToControls();
+        rebaseSpeechTranscriptFromTextarea();
+        updateLabels();
+        persistCurrentSessionDraft();
+    }
 }
 
 // ── SYNC ─────────────────────────────────────────────────────
@@ -794,26 +1125,13 @@ function debounceSync() {
 }
 
 async function pushUpdate(trackHistory = true) {
-    const data = {
-        text:         document.getElementById('msg').value,
-        x:            document.getElementById('posX').value + '%',
-        y:            document.getElementById('posY').value + '%',
-        w:            document.getElementById('width').value + '%',
-        h:            document.getElementById('height').value === 'auto' ? 'auto' : document.getElementById('height').value + 'px',
-        tCol:         document.getElementById('tCol').value,
-        tOp:          document.getElementById('tOp').value,
-        bCol:         document.getElementById('bCol').value,
-        bOp:          document.getElementById('boxOp').value,
-        fSize:        document.getElementById('fSize').value + 'px',
-        display:      document.getElementById('boxDisplay').value,
-        sessionToken: currentToken,
-        ts:           Date.now()
-    };
+    const state = overlaySettingsStore.getState();
+    const data = buildOverlayPayload(state, currentToken, Date.now());
     const lastText = undoStack.length ? undoStack[undoStack.length-1].text : null;
     if (trackHistory && data.text !== lastText) {
         undoStack.push(JSON.parse(JSON.stringify(data)));
         if (undoStack.length > 99) undoStack.shift();
-        document.getElementById('histCount').textContent = '(' + undoStack.length + ')';
+        updateHistoryCountLabel();
     }
     try {
         await db.ref('overlay').set(data);
@@ -829,10 +1147,28 @@ async function pushUpdate(trackHistory = true) {
 }
 
 async function forceLock() {
+    const lockedToken = currentToken;
     stopSpeech();
     try {
-        await db.ref('overlay').set({ text:'', display:'none', x:'10%', y:'10%', w:'30%', h:'auto', tCol:'#00ff00', tOp:'1', bCol:'#000000', bOp:'0', fSize:'18px', sessionToken: currentToken, ts: Date.now() });
+        await db.ref('overlay').set(buildOverlayPayload({
+            text: '',
+            posX: 10,
+            posY: 10,
+            width: 30,
+            height: 'auto',
+            fontSize: 18,
+            fontFamily: 'IBM Plex Mono, monospace',
+            bold: false,
+            italic: false,
+            underline: false,
+            textColor: '#00ff00',
+            textOpacity: '1',
+            boxColor: '#000000',
+            boxOpacity: '0',
+            display: 'none',
+        }, currentToken, Date.now()));
     } catch(e) {}
+    clearCurrentSessionDraft(lockedToken);
     currentToken = null;
     document.getElementById('mainApp').style.display = 'none';
     document.getElementById('lockScreen').style.display = 'flex';
@@ -843,13 +1179,18 @@ async function forceLock() {
 
 // ── CONTROLS ─────────────────────────────────────────────────
 function updatePreview() {
-    const text     = document.getElementById('msg').value;
-    const tCol     = document.getElementById('tCol').value;
-    const tOp      = parseFloat(document.getElementById('tOp').value);
-    const bCol     = document.getElementById('bCol').value;
-    const bOp      = parseFloat(document.getElementById('boxOp').value);
-    const fSize    = document.getElementById('fSize').value;
-    const display  = document.getElementById('boxDisplay').value;
+    const state    = overlaySettingsStore.getState();
+    const text     = state.text;
+    const tCol     = state.textColor;
+    const tOp      = parseFloat(state.textOpacity);
+    const bCol     = state.boxColor;
+    const bOp      = parseFloat(state.boxOpacity);
+    const fSize    = state.fontSize;
+    const display  = state.display;
+    const fontFamily = state.fontFamily;
+    const fontWeight = state.bold ? '700' : '400';
+    const fontStyle = state.italic ? 'italic' : 'normal';
+    const textDecoration = state.underline ? 'underline' : 'none';
 
     const previewText   = document.getElementById('previewText');
     const previewScreen = document.getElementById('previewScreen');
@@ -885,25 +1226,35 @@ function updatePreview() {
         statusLbl.style.color        = 'var(--green)';
 
         previewText.textContent       = text || '(no message)';
+        Object.assign(previewText.style, buildOverlayRenderStyle({
+            fontFamily,
+            fontSize: fSize,
+        }));
         previewText.style.color       = hexRgba(tCol, tOp);
-        previewText.style.fontSize    = fSize + 'px';
+        previewText.style.fontWeight  = fontWeight;
+        previewText.style.fontStyle   = fontStyle;
+        previewText.style.textDecoration = textDecoration;
         previewText.style.background  = hexRgba(bCol, bOp);
     }
 }
 
 function updateLabels() {
-    document.getElementById('vX').textContent  = document.getElementById('posX').value;
-    document.getElementById('vY').textContent  = document.getElementById('posY').value;
-    document.getElementById('vW').textContent  = document.getElementById('width').value;
-    document.getElementById('vO').textContent  = document.getElementById('boxOp').value;
-    document.getElementById('vTO').textContent = document.getElementById('tOp').value;
-    document.getElementById('vFS').textContent = document.getElementById('fSize').value;
-    document.getElementById('widthVal').textContent = document.getElementById('width').value + '%';
-    const hv = document.getElementById('height').value;
+    const state = arguments.length ? arguments[0] : syncOverlaySettingsStoreFromControls();
+    document.getElementById('vX').textContent  = state.posX;
+    document.getElementById('vY').textContent  = state.posY;
+    document.getElementById('vW').textContent  = state.width;
+    document.getElementById('vO').textContent  = state.boxOpacity;
+    document.getElementById('vTO').textContent = state.textOpacity;
+    document.getElementById('vFS').textContent = state.fontSize;
+    document.getElementById('widthVal').textContent = state.width + '%';
+    const hv = state.height;
     document.getElementById('vH').textContent = hv === 'auto' ? 'Auto' : hv + 'px';
     document.getElementById('heightVal').textContent = hv === 'auto' ? 'Auto' : hv + 'px';
-    document.getElementById('fontVal').textContent  = document.getElementById('fSize').value + 'px';
+    document.getElementById('fontVal').textContent  = state.fontSize + 'px';
+    syncVisibilityState(state.display);
+    refreshPresetControls();
     updatePreview();
+    scheduleSessionDraftSave();
 }
 
 function setStep(s, el) {
@@ -912,46 +1263,87 @@ function setStep(s, el) {
     el.classList.add('on');
 }
 
+function applySelectedPreset() {
+    const selectedPreset = getSelectedPreset();
+    if (!selectedPreset) {
+        return;
+    }
+    overlaySettingsStore.applySelectedPreset();
+    applyOverlaySettingsStateToControls();
+    updateLabels();
+    debounceSync();
+}
+
+function saveCurrentPreset() {
+    syncOverlaySettingsStoreFromControls();
+    const name = window.prompt('Name this preset:', '');
+    if (name === null) {
+        return;
+    }
+    const preset = overlaySettingsStore.createCustomPreset(name);
+    const savedPresets = overlaySettingsStore.saveCustomPreset(preset);
+    overlaySettingsStore.applyPreset(preset);
+    persistCustomPresets(savedPresets);
+    applyOverlaySettingsStateToControls();
+    updateLabels();
+}
+
+function deleteSelectedPreset() {
+    const preset = getSelectedPreset();
+    if (!preset || !preset.id.startsWith('custom-')) {
+        return;
+    }
+    const remainingPresets = overlaySettingsStore.deleteCustomPreset(preset.id);
+    persistCustomPresets(remainingPresets);
+    applyOverlaySettingsStateToControls();
+    updateLabels();
+}
+
 function movePos(dx, dy) {
-    const px = document.getElementById('posX');
-    const py = document.getElementById('posY');
-    px.value = Math.min(100, Math.max(0, parseInt(px.value) + dx * moveStep));
-    py.value = Math.min(100, Math.max(0, parseInt(py.value) + dy * moveStep));
-    updateLabels(); debounceSync();
+    const state = overlaySettingsStore.getState();
+    const nextState = applyOverlaySettingsStatePatch({
+        posX: Math.min(100, Math.max(0, state.posX + dx * moveStep)),
+        posY: Math.min(100, Math.max(0, state.posY + dy * moveStep)),
+    });
+    updateLabels(nextState); debounceSync();
 }
 
 function centerPos() {
-    document.getElementById('posX').value = 35;
-    document.getElementById('posY').value = 45;
-    updateLabels(); debounceSync();
+    const nextState = applyOverlaySettingsStatePatch({ posX: 35, posY: 45 });
+    updateLabels(nextState); debounceSync();
 }
 
 function changeWidth(d) {
-    const w = document.getElementById('width');
-    w.value = Math.min(100, Math.max(5, parseInt(w.value) + d * moveStep));
-    updateLabels(); debounceSync();
+    const state = overlaySettingsStore.getState();
+    const nextState = applyOverlaySettingsStatePatch({
+        width: Math.min(100, Math.max(5, state.width + d * moveStep)),
+    });
+    updateLabels(nextState); debounceSync();
 }
 
 function changeHeight(d) {
-    const h = document.getElementById('height');
-    const cur = h.value === 'auto' ? 80 : parseInt(h.value);
-    h.value = Math.min(800, Math.max(40, cur + d * moveStep));
-    updateLabels(); debounceSync();
+    const state = overlaySettingsStore.getState();
+    const currentHeight = state.height === 'auto' ? 80 : parseInt(state.height, 10);
+    const nextState = applyOverlaySettingsStatePatch({
+        height: Math.min(800, Math.max(40, currentHeight + d * moveStep)),
+    });
+    updateLabels(nextState); debounceSync();
 }
 
 function resetHeight() {
-    document.getElementById('height').value = 'auto';
-    updateLabels(); debounceSync();
+    const nextState = applyOverlaySettingsStatePatch({ height: 'auto' });
+    updateLabels(nextState); debounceSync();
 }
 
 function changeFontSize(d) {
-    const f = document.getElementById('fSize');
-    f.value = Math.min(72, Math.max(8, parseInt(f.value) + d));
-    updateLabels(); debounceSync();
+    const state = overlaySettingsStore.getState();
+    const nextState = applyOverlaySettingsStatePatch({
+        fontSize: Math.min(72, Math.max(8, state.fontSize + d)),
+    });
+    updateLabels(nextState); debounceSync();
 }
 
-function setVisibility(val) {
-    document.getElementById('boxDisplay').value = val;
+function syncVisibilityState(val) {
     const led    = document.getElementById('visLed');
     const ctrl   = document.getElementById('visCtrl');
     const showB  = document.getElementById('visShowBtn');
@@ -979,22 +1371,31 @@ function setVisibility(val) {
         showB.style.borderColor   = 'var(--border)';
         showB.style.color         = 'var(--text2)';
     }
+}
+
+function setVisibility(val) {
+    const nextState = applyOverlaySettingsStatePatch({ display: val });
+    updateLabels(nextState);
     debounceSync();
 }
 
 function masterKill() {
-    setVisibility('none');
+    clearTimeout(syncTimeout);
     stopSpeech(false);
-    document.getElementById('msg').value = '';
     speechTranscript.clear();
-    updatePreview();
+    const nextState = applyOverlaySettingsStatePatch({
+        text: '',
+        display: 'none',
+    });
+    updateLabels(nextState);
     pushUpdate();
 }
 
 function clearText() {
-    document.getElementById('msg').value = '';
+    clearTimeout(syncTimeout);
     speechTranscript.clear();
-    updatePreview();
+    const nextState = applyOverlaySettingsStatePatch({ text: '' });
+    updateLabels(nextState);
     pushUpdate();
 }
 
@@ -1002,12 +1403,66 @@ function undo() {
     if (undoStack.length > 1) {
         undoStack.pop();
         const p = undoStack[undoStack.length-1];
-        document.getElementById('msg').value = p.text;
+        const nextState = applyOverlaySettingsStatePatch({
+            text: p.text,
+            display: p.display,
+        });
         rebaseSpeechTranscriptFromTextarea();
-        document.getElementById('boxDisplay').value = p.display;
-        updateLabels(); pushUpdate();
+        updateLabels(nextState); pushUpdate();
     }
 }
+
+function toggleVisibilityShortcut() {
+    const state = overlaySettingsStore.getState();
+    setVisibility(state.display === 'block' ? 'none' : 'block');
+}
+
+const shortcutHandlers = {
+    'toggle-dictation': () => toggleSpeech(),
+    'toggle-visibility': () => toggleVisibilityShortcut(),
+    'clear-text': () => clearText(),
+    'undo': () => undo(),
+    'move-left': () => movePos(-1, 0),
+    'move-right': () => movePos(1, 0),
+    'move-up': () => movePos(0, -1),
+    'move-down': () => movePos(0, 1),
+    'font-size-up': () => changeFontSize(1),
+    'font-size-down': () => changeFontSize(-1),
+    'width-down': () => changeWidth(-1),
+    'width-up': () => changeWidth(1),
+};
+
+document.addEventListener('keydown', function (event) {
+    if (!currentToken || document.getElementById('mainApp').style.display !== 'block') {
+        return;
+    }
+
+    if (!shouldHandleShortcut(event)) {
+        return;
+    }
+
+    const action = matchShortcut(event);
+    const handler = shortcutHandlers[action];
+    if (!handler) {
+        return;
+    }
+
+    event.preventDefault();
+    handler();
+});
+
+window.addEventListener('pagehide', function () {
+    persistCurrentSessionDraft();
+});
+
+populateFontFamilyOptions();
+applyOverlaySettingsStateToControls();
+rebaseSpeechTranscriptFromTextarea();
+updateLabels();
+document.getElementById('presetSelect').addEventListener('change', function (event) {
+    overlaySettingsStore.selectPreset(event.target.value);
+    refreshPresetControls();
+});
 </script>
 </body>
 </html>
